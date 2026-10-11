@@ -60,8 +60,12 @@ impl Paths {
     fn rbx_soft(&self) -> PathBuf {
         self.work.join("target-soft-bench/release/rbx")
     }
-    fn prod(&self, soft: bool, bin: &str) -> PathBuf {
-        if soft {
+    fn prod(&self, aes: &str, bin: &str) -> PathBuf {
+        if aes == "hw-benchbuild" {
+            self.bench
+                .join("target/release")
+                .join(format!("prodsrc_{bin}"))
+        } else if aes == "soft" {
             self.work.join("target-soft/release").join(bin)
         } else {
             self.repo().join("target/release").join(bin)
@@ -293,6 +297,19 @@ const CONFIGS: &[Config] = &[
         procs: 2,
         only_sizes: &[0],
     },
+    // Supplementary A/B (not part of the default campaign; select with --configs):
+    // the unmodified production main.rs files compiled inside the bench crate.
+    Config {
+        name: "prodsrc-shm-aead",
+        family: "production",
+        transport: "shm-ring",
+        crypto: true,
+        aes: "hw-benchbuild",
+        source: "disk",
+        sink: "disk",
+        procs: 2,
+        only_sizes: GIB_ONLY,
+    },
 ];
 
 const UDS_TUNED_BUF: usize = 4 << 20;
@@ -323,10 +340,9 @@ fn commands(cfg: &Config, ctx: &RunCtx) -> Vec<(&'static str, Command)> {
     let crypto = if cfg.crypto { "1" } else { "0" };
 
     if cfg.family == "production" {
-        let soft = cfg.aes == "soft";
-        let mut r = Command::new(p.prod(soft, "reader"));
+        let mut r = Command::new(p.prod(cfg.aes, "reader"));
         r.arg(&out).args(["--channel", &channel]);
-        let mut w = Command::new(p.prod(soft, "writer"));
+        let mut w = Command::new(p.prod(cfg.aes, "writer"));
         w.arg(&input).args(["--channel", &channel]);
         return vec![("recv", r), ("send", w)];
     }
@@ -635,8 +651,11 @@ fn cmd_run(a: &Args, p: &Paths) -> Result<()> {
     // seeded random order across all configs and sizes, then untimed hash-verification runs.
     let mut pairs = Vec::new();
     for cfg in CONFIGS {
-        if selected.as_ref().is_some_and(|s| !s.contains(&cfg.name)) {
-            continue;
+        let supplementary = cfg.name.starts_with("prodsrc-");
+        match &selected {
+            Some(s) if !s.contains(&cfg.name) => continue,
+            None if supplementary => continue,
+            _ => {}
         }
         let cfg_sizes: Vec<usize> = if cfg.only_sizes.is_empty() {
             sizes.clone()

@@ -104,22 +104,30 @@ Run several independent transfers at once by giving each pair its own `--channel
 
 ## Performance
 
-Transferring a 1 GiB file of random data end to end (disk read → encrypt → shared memory
-→ decrypt → disk write and `fsync`) on an **Apple M4, macOS 26**, release build:
+Transferring a 1 GiB file of random data end to end between two independently launched
+processes (process start → disk read → encrypt → shared memory → decrypt → disk write,
+`fsync` and rename → both processes exited), with the default 256 KiB chunks and 4 MiB ring.
+Measured on an **Apple M4 MacBook Air, macOS 26.5.2**, release build, **warm page cache**,
+10 measured runs each:
 
-| Configuration | Time | Throughput |
-| --- | --- | --- |
-| Original (file in `/dev/shm`, OpenSSL CBC, whole file in memory) | does not run on macOS | n/a |
-| Refactor, software AES fallback | 5.12 s | ~200 MiB/s |
-| **Refactor, hardware AES (default)** | **0.68 s** | **~1.5 GiB/s** |
+| Configuration | Median time | Range | Throughput (median) |
+| --- | --- | --- | --- |
+| Original (file in `/dev/shm`, OpenSSL CBC, whole file in memory) | does not run on macOS | n/a | n/a |
+| Refactor, software AES fallback | 5.06 s | 5.01–5.12 s | ~202 MiB/s |
+| **Refactor, hardware AES (default)** | **~659 ms** | 651–888 ms | **~1.52 GiB/s** |
 
-Memory use is bounded by the ring size (4 MiB by default) rather than the file size, because
-the file is streamed in chunks instead of being loaded into memory whole.
+What the benchmark shows:
 
-Tuning tips:
+- At this size the transfer is bounded by file I/O. A single-process plain copy of the same file takes 561 ms, and a Unix domain socket with 4 MiB buffers and the same encryption takes 584 ms.
+- AES-256-GCM runs at ~2.4 GiB/s per core with the ARMv8 instructions and ~0.21 GiB/s without them.
+- Payloads up to 1 MiB take ~17 ms, mostly the reader's 10 ms retry interval when it connects.
 
-- Bigger chunks (`--chunk-size 1048576`) mean fewer frames and less per-message overhead. Keep the ring at least 4× the chunk size so both sides can work in parallel.
-- For benchmarking on your own machine only, `RUSTFLAGS="-C target-cpu=native"` can help a little more. Don't ship binaries built that way.
+Cold-cache performance was not measured. Peak memory stays around 6 MiB per process
+regardless of file size, because the file is streamed through the ring in chunks instead of
+being loaded into memory whole.
+
+Full methodology, raw data, comparisons with other transports and limitations are in
+[`bench/BENCHMARK_REPORT.md`](bench/BENCHMARK_REPORT.md).
 
 ## How it works
 

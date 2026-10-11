@@ -1,56 +1,17 @@
-### production workspace: cargo test --release
+### production: cargo test --release
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-test crypto::tests::detects_tampering_wrong_key_and_reordering ... ok
-test crypto::tests::hex_key_parsing ... ok
-test crypto::tests::roundtrip ... ok
-test ring::tests::header_is_cache_line_padded ... ok
-test ring::tests::commit_shorter_than_reserved ... ok
-test ring::tests::only_one_consumer ... ok
-test ring::tests::rejects_bad_capacity_and_oversized_messages ... ok
-test ring::tests::open_before_create_is_not_found ... ok
-test ring::tests::streams_many_messages_across_threads_with_wraparound ... ok
-test ring::tests::producer_notices_consumer_detaching_early ... ok
 test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-### production workspace: cargo clippy --all-targets --all-features -- -D warnings
+### production: clippy --all-targets --all-features -D warnings
 exit=0
-### bench crate: cargo test --release
+### bench: cargo test --release
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-test duplicated_frame_is_rejected ... ok
-test every_single_bit_flip_is_detected ... ok
-test reordered_stream_records_are_rejected ... ok
-test corrupted_ring_length_is_rejected_not_trusted ... ok
-test truncated_and_undersized_frames_are_rejected ... ok
-test reserve_exceeding_capacity_is_rejected ... ok
-test stream_truncation_is_detected_by_missing_end_frame ... ok
-test backpressure_and_wraparound_with_odd_sizes_byte_exact ... ok
-test stream_roundtrip_odd_sizes_plain_and_aead ... ok
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-### bench crate: cargo clippy --all-targets --all-features -- -D warnings
-error: very complex type used. Consider factoring parts into `type` definitions
-   --> src/bin/driver.rs:697:20
-error: could not compile `rustbridge-bench` (bin "driver") due to 1 previous error
-warning: build failed, waiting for other jobs to finish...
-error: could not compile `rustbridge-bench` (bin "driver" test) due to 1 previous error
-exit=101
-### bench crate (after fixes): cargo clippy --all-targets --all-features -- -D warnings
+### bench: clippy --all-targets --all-features -D warnings
 exit=0
-### bench crate (after fixes): cargo test --release
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-test duplicated_frame_is_rejected ... ok
-test corrupted_ring_length_is_rejected_not_trusted ... ok
-test every_single_bit_flip_is_detected ... ok
-test reordered_stream_records_are_rejected ... ok
-test reserve_exceeding_capacity_is_rejected ... ok
-test stream_truncation_is_detected_by_missing_end_frame ... ok
-test truncated_and_undersized_frames_are_rejected ... ok
-test backpressure_and_wraparound_with_odd_sizes_byte_exact ... ok
-test stream_roundtrip_odd_sizes_plain_and_aead ... ok
-test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

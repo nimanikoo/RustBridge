@@ -1,0 +1,34 @@
+run_id,kind,order,unix_time,config,family,transport,crypto,aes,source,sink,procs,size_bytes,e2e_ns,transfer_ns,sender_ns,startup_ns,shutdown_ns,prod_writer_internal_ns,prod_reader_internal_ns,send_utime_us,send_stime_us,send_maxrss_bytes,recv_utime_us,recv_stime_us,recv_maxrss_bytes,cpu_total_us,exit_ok,verified,note
+0,measured,0,1791745085,exp-uds-plain,experimental,uds-4MiB,false,-,disk,disk,2,16777216,707509375,18268541,6542750,688628375,610334,,,2709,8165,1900544,2749,11252,1900544,24875,true,true,
+1,measured,1,1791745085,copy-aead,experimental,none(1 proc),true,hw,disk,disk,1,16777216,26675375,24535875,24535875,1882958,255459,,,15894,3512,1949696,0,0,0,19406,true,true,
+2,measured,2,1791745085,exp-shm-aead,experimental,shm-ring,true,hw,disk,disk,2,16777216,31040500,29283416,19352791,1524667,232125,,,7337,2114,5586944,7122,2380,5603328,18953,true,true,
+3,measured,3,1791745086,prod-shm-aead,production,shm-ring,true,hw,disk,disk,2,16777216,1393579375,,,,,21566000,27159000,16296,7389,5947392,19747,8134,5898240,51566,true,true,
+4,measured,4,1791745086,exp-shm-plain,experimental,shm-ring,false,-,disk,disk,2,16777216,30499625,28352958,14337458,1875042,271292,,,1317,2594,5570560,951,2759,5586944,7621,true,true,
+5,measured,5,1791745087,prod-shm-aead-softaes,production,shm-ring,true,soft,disk,disk,2,16777216,1092303084,,,,,106865000,105177000,104403,4820,5914624,100970,6327,5947392,216520,true,true,
+6,measured,6,1791745087,copy-aead,experimental,none(1 proc),true,hw,disk,disk,1,4096,6330209,4681291,4681291,1468084,180292,,,753,686,1687552,0,0,0,1439,true,true,
+7,measured,7,1791745087,prod-shm-aead-softaes,production,shm-ring,true,soft,disk,disk,2,4096,18704084,,,,,12459000,4603000,822,1014,1982464,744,614,2015232,3194,true,true,
+8,measured,8,1791745087,exp-file-plain,experimental,staged-file,false,-,disk,disk,2,4096,6610333,5126875,135875,1254500,228792,,,634,519,1654784,696,697,1622016,2546,true,true,
+9,measured,9,1791745087,exp-mmap-plain,experimental,staged-mmap,false,-,disk,disk,2,4096,6549084,5067375,149250,1285500,195959,,,657,531,1622016,663,533,1638400,2384,true,true,
+10,measured,10,1791745087,exp-uds-plain,experimental,uds-4MiB,false,-,disk,disk,2,4096,1564958,,10584,1338916,,,,699,442,1638400,663,447,1589248,2251,false,false,FAILED recv:Error: setsockopt: Invalid argument (os error 22) ; send:
+11,measured,11,1791745087,mem-uds-aead,experimental,uds-4MiB,true,hw,mem,null,2,16777216,12549750,7001000,6883625,5340583,207875,,,10561,1437,18743296,6798,1046,1933312,19842,true,by-verify-run,
+12,measured,12,1791745087,copy-plain,experimental,none(1 proc),false,-,disk,disk,1,4096,4385125,2968625,2968625,1211417,204917,,,601,526,1654784,0,0,0,1127,true,true,
+13,measured,13,1791745087,exp-mmap-aead,experimental,staged-mmap,true,hw,disk,disk,2,16777216,28996375,27404208,9734917,1227792,363375,,,6839,2844,18415616,6980,3905,18432000,20568,true,true,
+14,measured,14,1791745088,exp-shm-aead,experimental,shm-ring,true,hw,disk,disk,2,4096,15962833,14263583,12433083,1506042,192917,,,772,1008,1654784,705,716,1671168,3201,true,true,
+15,measured,15,1791745088,exp-uds-aead,experimental,uds-4MiB,true,hw,disk,disk,2,4096,2762625,,17750,2517166,,,,615,417,1671168,619,461,1605632,2112,false,false,FAILED recv:Error: setsockopt: Invalid argument (os error 22) ; send:
+16,measured,16,1791745088,mem-uds-plain,experimental,uds-4MiB,false,-,mem,null,2,16777216,6419041,836583,828625,5303000,209250,,,4405,1476,18710528,672,1113,1884160,7666,true,by-verify-run,
+17,measured,17,1791745088,prod-shm-aead,production,shm-ring,true,hw,disk,disk,2,4096,16079584,,,,,10360000,4271000,704,831,2015232,661,549,1966080,2745,true,true,
+18,measured,18,1791745088,copy-plain,experimental,none(1 proc),false,-,disk,disk,1,16777216,13898667,12559250,12559250,1111125,227708,,,624,2697,1900544,0,0,0,3321,true,true,
+19,measured,19,1791745088,exp-file-aead,experimental,staged-file,true,hw,disk,disk,2,4096,7492333,5796084,159584,1465208,230625,,,674,633,1687552,711,764,1654784,2782,true,true,
+20,measured,20,1791745088,mem-shm-aead,experimental,shm-ring,true,hw,mem,null,2,16777216,20294292,14728292,14754125,5255042,195958,,,10616,1415,22396928,6837,480,5586944,19348,true,by-verify-run,
+21,measured,21,1791745088,exp-shm-plain,experimental,shm-ring,false,-,disk,disk,2,4096,17191917,15760417,12547667,1231250,200042,,,699,861,1638400,641,513,1654784,2714,true,true,
+22,measured,22,1791745088,spawn-baseline,experimental,none(2 noop procs),false,-,-,-,2,0,1383500,,,,,,,620,346,1523712,620,361,1523712,1947,true,n/a,
+23,measured,23,1791745088,exp-mmap-plain,experimental,staged-mmap,false,-,disk,disk,2,16777216,22568541,21018625,3449875,1227458,321875,,,652,2766,18382848,673,2678,18399232,6769,true,true,
+24,measured,24,1791745088,exp-mmap-aead,experimental,staged-mmap,true,hw,disk,disk,2,4096,7294167,5644541,175708,1445209,204209,,,668,650,1654784,700,645,1654784,2663,true,true,
+25,measured,25,1791745088,exp-uds-aead,experimental,uds-4MiB,true,hw,disk,disk,2,16777216,15678708,14171833,7754917,1260458,246084,,,6950,1853,1933312,7019,2561,1949696,18383,true,true,
+26,measured,26,1791745088,exp-file-aead,experimental,staged-file,true,hw,disk,disk,2,16777216,26143875,24407792,8445000,1436292,299166,,,6776,2836,1949696,6768,2945,1949696,19325,true,true,
+27,measured,27,1791745088,mem-shm-plain,experimental,shm-ring,false,-,mem,null,2,16777216,12116750,6126125,6126542,5627166,251417,,,4786,1348,22364160,991,457,1884160,7582,true,by-verify-run,
+28,measured,28,1791745088,exp-file-plain,experimental,staged-file,false,-,disk,disk,2,16777216,23623125,21835375,2671959,1424791,362084,,,742,3081,1916928,690,3271,1900544,7784,true,true,
+29,verify,29,1791745088,mem-shm-aead,experimental,shm-ring,true,hw,mem,null,2,16777216,50606042,44535875,44586416,5727667,205833,,,12935,2408,22396928,36835,628,5586944,52806,true,true,receiver-side sha256
+30,verify,30,1791745088,mem-shm-plain,experimental,shm-ring,false,-,mem,null,2,16777216,43906208,38246125,38284042,5326958,199167,,,6364,2215,22364160,30123,732,5586944,39434,true,true,receiver-side sha256
+31,verify,31,1791745088,mem-uds-aead,experimental,uds-4MiB,true,hw,mem,null,2,16777216,41379958,35567833,26677791,5589875,221875,,,11219,1695,18743296,35327,1248,1933312,49489,true,true,receiver-side sha256
+32,verify,32,1791745088,mem-uds-plain,experimental,uds-4MiB,false,-,mem,null,2,16777216,34749958,29041125,21724500,5501625,206791,,,4515,1764,18710528,28781,1420,1900544,36480,true,true,receiver-side sha256
