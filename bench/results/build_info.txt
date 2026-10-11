@@ -1,0 +1,22 @@
+# Build info (2026-10-11T18:57:52Z)
+profile: release (opt-level=3, lto=fat, codegen-units=1, debug=false, panic=unwind)
+hw rustflags (from ../.cargo/config.toml): --cfg aes_armv8 --cfg polyval_armv8
+soft RUSTFLAGS: --cfg aes_force_soft --cfg polyval_force_soft
+target-cpu: default for aarch64-apple-darwin (apple-m1 baseline); no -C target-cpu=native
+
+binary                                               aese  aesmc  pmull pmull2
+../target/release/writer                               60     47     16      4
+../target/release/reader                               60     47     16      4
+work/target-soft/release/writer                         0      0      0      0
+work/target-soft/release/reader                         0      0      0      0
+target/release/rbx                                     90     73     16      4
+work/target-soft-bench/release/rbx                      0      0      0      0
+
+sha256 of binaries:
+5605a2f8c2482a9761c7bea26ba4d3a45822bde4bd3b00fb1b4b3e4cf53c16ac  ../target/release/writer
+9e195a7abf3ad6b881c357c5b9656aecff2c493d6da29b0c1decdb8488c326d9  ../target/release/reader
+146d12b1926e7a7fd88cb6c885ef2d8cc979c036877343deafdea886b765596c  work/target-soft/release/writer
+c64194e4406b274b7c5a3495fd9085067f27724e0c6ac7d8c4106fe059c2cbd7  work/target-soft/release/reader
+2a37cf639c534a54e25bbd38bec26be2760e436c2bda6dd3c0016a6239f8c77e  target/release/rbx
+c537759a4545a2f86ca0bc11bc21d562f5fe78b301bc43c4da2eedf80a8bd0dd  target/release/driver
+feb0ffe025305c8c8c90233e786ab96a25d45c28e02d3e3779d8bec902c46903  work/target-soft-bench/release/rbx
