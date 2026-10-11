@@ -1,0 +1,22 @@
+# Benchmark harness for RustBridge. Deliberately NOT a member of the production workspace:
+# it has its own [workspace] table, target dir and lock file (seeded from ../Cargo.lock so
+# shared_ipc resolves to the same dependency versions as production).
+[package]
+name = "rustbridge-bench"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+shared_ipc = { path = "../shared_ipc" }
+anyhow = "1"
+libc = "0.2"
+memmap2 = "0.9"
+sha2 = "0.10"
+
+# Same release profile as the production workspace.
+[profile.release]
+lto = "fat"
+codegen-units = 1

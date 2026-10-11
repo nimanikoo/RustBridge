@@ -1,0 +1,40 @@
+== payload edge cases (production writer/reader)
+PASS  payload_0.bin: both exit 0 (writer=0 reader=0)
+PASS  payload_0.bin: sha256 matches
+PASS  payload_4096.bin: both exit 0 (writer=0 reader=0)
+PASS  payload_4096.bin: sha256 matches
+PASS  payload_1000003.bin: both exit 0 (writer=0 reader=0)
+PASS  payload_1000003.bin: sha256 matches
+PASS  1-byte payload: sha256 matches
+== ring wraparound + backpressure (4 KiB ring, 1000-byte chunks, 1000003-byte payload)
+PASS  tiny ring: exit 0 and sha256 matches
+PASS  segment unlinked after successful transfer
+PASS  chunk larger than ring capacity is refused by writer
+== keys
+PASS  writer without key exits non-zero with hint
+PASS  reader without key exits non-zero
+PASS  malformed key rejected
+== wrong key + destination preservation + cleanup
+PASS  reader with wrong key fails authentication
+PASS  writer notices the reader detached and exits non-zero (no hang)
+PASS  existing destination preserved byte-for-byte
+PASS  no .part file left behind
+PASS  segment unlinked after failed transfer
+== early reader exit (reader SIGKILLed mid-stream)
+PASS  writer exits non-zero after reader killed (exit=1, not timeout 142)
+PASS  segment unlinked after writer error exit
+PASS  killed reader leaves only .part, never the final file
+== writer termination (writer SIGKILLed mid-stream; 1 GiB so the kill lands mid-transfer)
+PASS  reader exits non-zero after writer killed (exit=1, not timeout 142)
+PASS  no destination and no .part after writer killed
+PASS  killed writer leaves a stale segment (expected, documented)
+PASS  reader started first ignores stale segment; next transfer succeeds
+== single consumer + argument validation
+PASS  second concurrent reader refused
+PASS  first reader still completes correctly
+PASS  invalid channel name rejected
+PASS  channel name over 31 bytes rejected
+PASS  non-power-of-two ring rejected
+PASS  reader times out cleanly when no writer appears
+
+summary: 31 passed, 0 failed

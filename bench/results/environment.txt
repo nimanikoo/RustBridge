@@ -1,0 +1,63 @@
+# Environment (2026-10-11T19:03:30Z)
+Model Name: MacBook Air
+Model Identifier: Mac16,12
+Chip: Apple M4
+Total Number of Cores: 10 (4 Performance and 6 Efficiency)
+Memory: 16 GB
+hw.model: Mac16,12
+cpu: Apple M4  arch: arm64
+cores: 10 total, perf=4 eff=6
+memsize: 17179869184 bytes; pagesize: 16384
+cache line: 128; l2(perf): 16777216
+arm features: AES=1 PMULL=1 SHA256=1
+macOS ProductName:		macOS
+macOS ProductVersion:		26.5.2
+macOS BuildVersion:		25F84
+kernel: Darwin Kernel Version 25.5.0: Tue Jun  9 22:26:22 PDT 2026; root:xnu-12377.121.10~1/RELEASE_ARM64_T8132
+UDS default buffers: sendspace=8192 recvspace=8192 maxsockbuf=8388608
+power: Now drawing from 'AC Power'  -InternalBattery-0 (id=22347875)	61%; charging; 2:10 remaining present: true 
+thermal: Note: No thermal warning level has been recorded Note: No performance warning level has been recorded Note: No CPU power status has been recorded 
+low power mode: lowpowermode 0
+filesystem: File System Personality:   APFS;Protocol:                  Apple Fabric;Solid State:               Yes;
+free disk: /dev/disk3s5   228Gi   142Gi    61Gi    70%    1.8M  644M    0%   /System/Volumes/Data
+load: 22:33  up 1 day, 22:57, 1 user, load averages: 1.52 2.21 1.97
+rustc 1.99.0 (b940084d7 2026-09-28)
+binary: rustc
+commit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4
+commit-date: 2026-09-28
+host: aarch64-apple-darwin
+release: 1.99.0
+LLVM version: 23.1.1
+cargo 1.99.0 (5f94df478 2026-08-27)
+deps (bench + shared_ipc):
+aes v0.8.4
+aes-gcm v0.10.3
+anyhow v1.0.104
+cipher v0.4.4
+cipher v0.4.4 (*)
+cpufeatures v0.2.17
+cpufeatures v0.2.17 (*)
+ctr v0.9.2
+getrandom v0.2.15
+getrandom v0.2.15 (*)
+ghash v0.5.1
+libc v0.2.172
+memmap2 v0.9.11
+polyval v0.6.2
+sha2 v0.10.9
+production repo state: b8fffce + uncommitted changes:
+ M .gitignore
+ M Cargo.lock
+ M Cargo.toml
+ M reader/Cargo.toml
+ M reader/src/main.rs
+ M shared_ipc/Cargo.toml
+ M shared_ipc/src/lib.rs
+ M shared_ipc/src/shm.rs
+ M writer/Cargo.toml
+ M writer/src/main.rs
+?? .cargo/
+?? README.md
+?? bench/
+?? shared_ipc/src/crypto.rs
+?? shared_ipc/src/ring.rs

@@ -1,1 +1,5 @@
 /target
+/test_data/output*
+*.part
+.DS_Store
+.codebase-memory/
