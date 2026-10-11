@@ -15,6 +15,11 @@ anyhow = "1"
 libc = "0.2"
 memmap2 = "0.9"
 sha2 = "0.10"
+# Only for prodsrc_writer/prodsrc_reader: verbatim copies of the production main.rs files,
+# built in this crate to separate source-level from build-level performance differences.
+clap = { version = "4", features = ["derive"] }
+env_logger = "0.11"
+log = "0.4"
 
 # Same release profile as the production workspace.
 [profile.release]
