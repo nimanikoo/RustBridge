@@ -138,9 +138,12 @@ fn corrupted_ring_length_is_rejected_not_trusted() {
     let mut c = Consumer::open(&name).unwrap();
     p.send(b"hello").unwrap();
     // A third party maps the same segment and scribbles over the first record's length.
-    // Data area starts after the 192-byte header (asserted by the production unit tests).
+    // The data area begins at HEADER_SIZE. After the in-segment wait set was added, that is
+    // 384 bytes on macOS/arm64 (was 192); see shared_ipc's header_is_cache_line_padded test.
+    // HEADER_SIZE is private and st_size is page-rounded, so this is hardcoded to match.
+    const DATA_START: usize = 384;
     let seg = ShmSegment::open(&name).unwrap();
-    unsafe { (seg.as_ptr().add(192) as *mut u32).write(1_000_000) };
+    unsafe { (seg.as_ptr().add(DATA_START) as *mut u32).write(1_000_000) };
     let err = c.recv().err().expect("corrupt length accepted");
     assert_eq!(err.kind(), io::ErrorKind::InvalidData);
 }
