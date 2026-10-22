@@ -899,6 +899,7 @@ struct Stats {
     mean: f64,
     stdev: f64,
     p95: Option<f64>,
+    p99: Option<f64>,
 }
 
 fn stats(mut v: Vec<f64>) -> Stats {
@@ -918,8 +919,11 @@ fn stats(mut v: Vec<f64>) -> Stats {
     } else {
         0.0
     };
-    // Nearest-rank p95, reported only when there are at least 10 samples.
-    let p95 = (n >= 10).then(|| v[((0.95 * n as f64).ceil() as usize).clamp(1, n) - 1]);
+    // Nearest-rank percentiles, reported only when there are at least 10 samples (with the
+    // default 10 measured runs per config, p95 and p99 both resolve to the slowest sample).
+    let pct = |p: f64| v[((p * n as f64).ceil() as usize).clamp(1, n) - 1];
+    let p95 = (n >= 10).then(|| pct(0.95));
+    let p99 = (n >= 10).then(|| pct(0.99));
     Stats {
         n,
         median,
@@ -928,6 +932,7 @@ fn stats(mut v: Vec<f64>) -> Stats {
         mean,
         stdev,
         p95,
+        p99,
     }
 }
 
@@ -1008,6 +1013,7 @@ cpu_total_median_ms,cpu_util_median_pct,send_maxrss_median_mib,recv_maxrss_media
     );
     let mut md = String::new();
     let mut by_size: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+    let mut json_rows: Vec<String> = Vec::new();
     for ((size, name), rs) in &groups {
         let m = meta[name];
         let e2e = stats(col(rs, "e2e_ns").iter().map(|x| x / 1e6).collect());
@@ -1170,7 +1176,28 @@ cpu_total_median_ms,cpu_util_median_pct,send_maxrss_median_mib,recv_maxrss_media
             nfail,
             cpu.median, util.median, srss.median, rrss.median,
         ));
+        let jopt = |s: &Stats| -> String {
+            if s.n > 0 {
+                format!("{:.4}", s.median)
+            } else {
+                "null".into()
+            }
+        };
+        let jpct = |o: Option<f64>| o.map(|v| format!("{v:.4}")).unwrap_or("null".into());
+        json_rows.push(format!(
+            "{{\"config\":\"{name}\",\"family\":\"{}\",\"transport\":\"{}\",\"crypto\":{},\"aes\":\"{}\",\"source\":\"{}\",\"sink\":\"{}\",\"size_bytes\":{size},\"n\":{},\
+\"e2e_ms\":{{\"p50\":{:.4},\"min\":{:.4},\"max\":{:.4},\"mean\":{:.4},\"stdev\":{:.4},\"p95\":{},\"p99\":{}}},\
+\"throughput_mib_s\":{:.2},\"transfer_ms_p50\":{},\"cpu_ms_p50\":{},\"cpu_util_pct_p50\":{:.1},\"verified\":\"{ver}\",\"failed\":{nfail}}}",
+            m["family"], m["transport"], m["crypto"], m["aes"], m["source"], m["sink"], e2e.n,
+            e2e.median, e2e.min, e2e.max, e2e.mean, e2e.stdev,
+            jpct(e2e.p95), jpct(e2e.p99),
+            thr(e2e.median), jopt(&tr), jopt(&cpu), util.median,
+        ));
     }
+    fs::write(
+        p.results.join("summary.json"),
+        format!("[\n  {}\n]\n", json_rows.join(",\n  ")),
+    )?;
     for (size, lines) in &by_size {
         writeln!(md, "\n### Payload {}\n", fmt_size(*size))?;
         md.push_str("| config | n | e2e MiB/s | e2e GiB/s | e2e median ms | min ms | max ms | p95 ms | CV | failed | transfer median ms (MiB/s) | CPU ms | CPU util | peak RSS MiB send / recv | verified |\n");
@@ -1255,6 +1282,165 @@ cpu_total_median_ms,cpu_util_median_pct,send_maxrss_median_mib,recv_maxrss_media
     Ok(())
 }
 
+// ------------------------------------------------------------------------- latency command
+
+/// (config name, rbx responder subcommand, rbx requester subcommand, crypto).
+const LAT_FLOWS: &[(&str, &str, &str, bool)] = &[
+    ("shm-raw", "lat-shm-resp", "lat-shm-req", false),
+    ("shm-aead", "lat-shm-resp", "lat-shm-req", true),
+    ("uds-raw", "lat-uds-resp", "lat-uds-req", false),
+    ("uds-aead", "lat-uds-resp", "lat-uds-req", true),
+];
+
+/// Steady-state request/echo round-trip latency for each flow and payload size. Writes
+/// results/latency.json and results/latency.md, and prints a table. Separate from `run`,
+/// which measures whole-file throughput across process launches.
+fn cmd_latency(a: &Args, p: &Paths) -> Result<()> {
+    let sizes = match a.get("sizes") {
+        Some(s) => s
+            .split(',')
+            .map(|x| x.parse().context("bad --sizes"))
+            .collect::<Result<Vec<usize>>>()?,
+        None => vec![64, 1024, 65536],
+    };
+    let rounds = a.num("rounds", 50_000)?;
+    let warmup = a.num("warmup", 5_000)?;
+    let selected: Option<Vec<&str>> = a.get("configs").map(|s| s.split(',').collect());
+    let out = a
+        .get("out")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| p.results.join("latency.json"));
+    fs::create_dir_all(p.work.join("sock"))?;
+    let key = {
+        let mut k = [0u8; 32];
+        fill_payload(1 << 40, &mut k);
+        hex(&k)
+    };
+
+    // Warm up the binary once so first-launch cost does not land in a measured flow.
+    let _ = Command::new(p.rbx()).arg("noop").status();
+
+    let fields = [
+        "n",
+        "min_ns",
+        "p50_ns",
+        "p90_ns",
+        "p95_ns",
+        "p99_ns",
+        "max_ns",
+        "mean_ns",
+        "stddev_ns",
+    ];
+    let mut json_rows: Vec<String> = Vec::new();
+    let mut table: Vec<String> = Vec::new();
+    let mut id = 0usize;
+    for (name, resp_sub, req_sub, crypto) in LAT_FLOWS {
+        if selected.as_ref().is_some_and(|s| !s.contains(name)) {
+            continue;
+        }
+        let transport = if name.starts_with("shm") {
+            "shm"
+        } else {
+            "uds"
+        };
+        for &size in &sizes {
+            id += 1;
+            let crypto_flag = if *crypto { "1" } else { "0" };
+            let common = |c: &mut Command| {
+                c.args(["--crypto", crypto_flag])
+                    .args(["--bytes", &size.to_string()])
+                    .args(["--rounds", &rounds.to_string()])
+                    .args(["--warmup", &warmup.to_string()]);
+            };
+            let mut resp = Command::new(p.rbx());
+            resp.arg(resp_sub);
+            let mut req = Command::new(p.rbx());
+            req.arg(req_sub);
+            if transport == "shm" {
+                let reqch = format!("/Lq{id}");
+                let respch = format!("/Lp{id}");
+                for c in [&mut resp, &mut req] {
+                    c.args(["--req", &reqch]).args(["--resp", &respch]);
+                }
+            } else {
+                let sock = p
+                    .work
+                    .join("sock")
+                    .join(format!("lat{id}.sock"))
+                    .display()
+                    .to_string();
+                resp.args(["--socket", &sock]);
+                req.args(["--socket", &sock]);
+            }
+            common(&mut resp);
+            common(&mut req);
+
+            let (_, _, results) = execute(vec![("responder", resp), ("requester", req)], &key)?;
+            let r = results.iter().find(|r| r.role == "requester").unwrap();
+            let exit_ok = results.iter().all(ProcResult::ok);
+            if !exit_ok {
+                let errs: Vec<String> = results
+                    .iter()
+                    .map(|r| format!("{}:{}", r.role, r.stderr.trim()))
+                    .collect();
+                eprintln!("[latency] {name} {size}B FAILED: {}", errs.join(" ; "));
+                json_rows.push(format!(
+                    "{{\"config\":\"{name}\",\"transport\":\"{transport}\",\"crypto\":{crypto},\"bytes\":{size},\"ok\":false}}"
+                ));
+                continue;
+            }
+            let get = |k: &str| r.sfield(k).unwrap_or_default();
+            let verified = get("verified") == "true";
+            let us = |k: &str| r.field(k).unwrap_or(0) as f64 / 1000.0;
+            let obj_fields: Vec<String> = fields
+                .iter()
+                .map(|f| format!("\"{}\":{}", f.trim_end_matches("_ns"), get(f)))
+                .collect();
+            json_rows.push(format!(
+                "{{\"config\":\"{name}\",\"transport\":\"{transport}\",\"crypto\":{crypto},\"bytes\":{size},\"metric\":\"round_trip_ns\",{},\"verified\":{verified},\"ok\":true}}",
+                obj_fields.join(",")
+            ));
+            table.push(format!(
+                "| {name} | {size} | {} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {} |",
+                get("n"),
+                us("p50_ns"),
+                us("p95_ns"),
+                us("p99_ns"),
+                us("min_ns"),
+                us("max_ns"),
+                get("mean_ns").parse::<f64>().unwrap_or(0.0) / 1000.0,
+                if verified { "yes" } else { "NO" },
+            ));
+            eprintln!(
+                "[latency] {name:<9} {size:>6}B  p50={:.2}us p99={:.2}us (n={}) verified={verified}",
+                us("p50_ns"),
+                us("p99_ns"),
+                get("n"),
+            );
+        }
+    }
+
+    fs::write(&out, format!("[\n  {}\n]\n", json_rows.join(",\n  ")))?;
+    let mut md = String::from(
+        "# Round-trip latency (request/echo, steady state)\n\n\
+         RTT = one request sent and echoed back, timed in the requester with CLOCK_MONOTONIC_RAW,\n\
+         after warm-up. Shared memory busy-spins (low latency, high CPU); UDS blocks in the kernel.\n\n\
+         | flow | bytes | n | p50 us | p95 us | p99 us | min us | max us | mean us | verified |\n\
+         |---|---|---|---|---|---|---|---|---|---|\n",
+    );
+    for row in &table {
+        md.push_str(row);
+        md.push('\n');
+    }
+    fs::write(p.results.join("latency.md"), md)?;
+    eprintln!(
+        "wrote {} and latency.md ({} flows)",
+        out.display(),
+        json_rows.len()
+    );
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let mut argv = std::env::args().skip(1);
     let cmd = argv.next().unwrap_or_default();
@@ -1265,6 +1451,7 @@ fn main() -> Result<()> {
         "gen" => cmd_gen(&a, &p),
         "run" => cmd_run(&a, &p),
         "aead" => cmd_aead(&a, &p),
+        "latency" => cmd_latency(&a, &p),
         "summarize" => cmd_summarize(&a, &p),
         _ => bail!("usage: driver gen|run|aead|summarize [options]"),
     }

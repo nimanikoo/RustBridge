@@ -128,6 +128,76 @@ impl Args {
     }
 }
 
+/// Nearest-rank percentile of already-sorted ascending samples. `p` is in 0..=100.
+fn nearest_rank(sorted: &[u64], p: f64) -> u64 {
+    if sorted.is_empty() {
+        return 0;
+    }
+    let rank = ((p / 100.0) * sorted.len() as f64).ceil() as usize;
+    sorted[rank.clamp(1, sorted.len()) - 1]
+}
+
+/// Distribution of latency samples, in nanoseconds. Used by the latency benchmark so the
+/// requester process can report p50/p95/p99 etc. without shipping every raw sample.
+#[derive(Clone)]
+pub struct LatencyStats {
+    pub n: usize,
+    pub min: u64,
+    pub p50: u64,
+    pub p90: u64,
+    pub p95: u64,
+    pub p99: u64,
+    pub max: u64,
+    pub mean: f64,
+    pub stddev: f64,
+}
+
+impl LatencyStats {
+    /// Sorts `samples` in place and summarises them. Percentiles below are only meaningful
+    /// with enough samples (the latency bench uses tens of thousands).
+    pub fn from_samples(samples: &mut [u64]) -> Self {
+        assert!(!samples.is_empty(), "no latency samples");
+        samples.sort_unstable();
+        let n = samples.len();
+        let sum: u128 = samples.iter().map(|&s| s as u128).sum();
+        let mean = sum as f64 / n as f64;
+        let var = samples
+            .iter()
+            .map(|&s| {
+                let d = s as f64 - mean;
+                d * d
+            })
+            .sum::<f64>()
+            / n as f64;
+        Self {
+            n,
+            min: samples[0],
+            p50: nearest_rank(samples, 50.0),
+            p90: nearest_rank(samples, 90.0),
+            p95: nearest_rank(samples, 95.0),
+            p99: nearest_rank(samples, 99.0),
+            max: samples[n - 1],
+            mean,
+            stddev: var.sqrt(),
+        }
+    }
+
+    /// `RBX role=...`-style fields, so the driver reuses its existing line parser.
+    pub fn as_fields(&self) -> Vec<(&'static str, String)> {
+        vec![
+            ("n", self.n.to_string()),
+            ("min_ns", self.min.to_string()),
+            ("p50_ns", self.p50.to_string()),
+            ("p90_ns", self.p90.to_string()),
+            ("p95_ns", self.p95.to_string()),
+            ("p99_ns", self.p99.to_string()),
+            ("max_ns", self.max.to_string()),
+            ("mean_ns", format!("{:.1}", self.mean)),
+            ("stddev_ns", format!("{:.1}", self.stddev)),
+        ]
+    }
+}
+
 /// Prints the single machine-readable result line consumed by the driver.
 pub fn report(role: &str, fields: &[(&str, String)]) {
     let mut line = format!("RBX role={role}");
