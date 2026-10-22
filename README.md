@@ -129,6 +129,27 @@ being loaded into memory whole.
 Full methodology, raw data, comparisons with other transports and limitations are in
 [`bench/BENCHMARK_REPORT.md`](bench/BENCHMARK_REPORT.md).
 
+### Single-message latency
+
+Throughput is one thing; per-message latency is another. The suite also measures round-trip
+latency (request echoed back, in steady state) across four flows — shared memory and a Unix
+domain socket, each with and without AES-256-GCM — reporting p50/p95/p99. The no-encryption
+shared-memory flow (**Shared Memory — Raw Data**) isolates IPC and synchronization cost from
+cryptographic cost.
+
+| Flow (64 B payload) | p50 | p99 |
+| --- | --- | --- |
+| Shared memory, raw | **0.33 µs** | 0.92 µs |
+| Shared memory, AES-256-GCM | 0.33 µs | 0.79 µs |
+| Unix domain socket, raw | 4.33 µs | 9.12 µs |
+| Unix domain socket, AES-256-GCM | 4.33 µs | 8.58 µs |
+
+Raw shared memory has ~13× lower small-message latency than a Unix domain socket, because the
+ring exchanges data through mapped memory with no syscall on the hot path. That low latency
+comes from busy-spinning (high idle CPU), whereas the socket blocks in the kernel (near-zero
+idle CPU) — a trade-off, not a free win. Methodology, the full table, per-size results and a
+macOS wakeup caveat are in [`bench/LATENCY.md`](bench/LATENCY.md).
+
 ## How it works
 
 ### Crates
@@ -207,9 +228,15 @@ The tests cover:
 - cross-thread streaming of 20,000 messages with wrap-around
 - capacity and size validation
 - single-consumer enforcement
-- detection of a consumer that detaches early
+- detection of a consumer that detaches early, and that a parked waiter exits (never hangs)
+  when its peer dies
 - crypto round-trips
 - rejection of tampered, flag-flipped, wrong-key and out-of-order frames
+
+The benchmark crate adds protocol tests (`bench/tests/protocol.rs`) and raw-flow round-trip
+integrity tests (`bench/tests/raw_roundtrip.rs`), plus a cross-process failure suite
+(`bench/scripts/failure_tests.sh`). See [`bench/BENCHMARK_REPORT.md`](bench/BENCHMARK_REPORT.md)
+and [`bench/LATENCY.md`](bench/LATENCY.md) for how to build and run the full suite.
 
 ## Troubleshooting
 

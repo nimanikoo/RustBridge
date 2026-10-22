@@ -1,0 +1,14 @@
+[
+  {"config":"shm-raw","transport":"shm","crypto":false,"bytes":64,"metric":"round_trip_ns","n":50000,"min":125,"p50":334,"p90":625,"p95":750,"p99":917,"max":32125,"mean":422.7,"stddev":462.2,"verified":true,"ok":true},
+  {"config":"shm-raw","transport":"shm","crypto":false,"bytes":1024,"metric":"round_trip_ns","n":50000,"min":125,"p50":541,"p90":834,"p95":916,"p99":1000,"max":36167,"mean":591.1,"stddev":375.0,"verified":true,"ok":true},
+  {"config":"shm-raw","transport":"shm","crypto":false,"bytes":65536,"metric":"round_trip_ns","n":50000,"min":1500,"p50":2625,"p90":3292,"p95":4333,"p99":6334,"max":867917,"mean":2905.4,"stddev":5621.6,"verified":true,"ok":true},
+  {"config":"shm-aead","transport":"shm","crypto":true,"bytes":64,"metric":"round_trip_ns","n":50000,"min":167,"p50":333,"p90":375,"p95":459,"p99":792,"max":27250,"mean":357.2,"stddev":321.0,"verified":true,"ok":true},
+  {"config":"shm-aead","transport":"shm","crypto":true,"bytes":1024,"metric":"round_trip_ns","n":50000,"min":1750,"p50":2333,"p90":2459,"p95":2625,"p99":3250,"max":39750,"mean":2251.1,"stddev":655.4,"verified":true,"ok":true},
+  {"config":"shm-aead","transport":"shm","crypto":true,"bytes":65536,"metric":"round_trip_ns","n":50000,"min":99292,"p50":106917,"p90":128667,"p95":133833,"p99":145708,"max":411250,"mean":111897.6,"stddev":12039.3,"verified":true,"ok":true},
+  {"config":"uds-raw","transport":"uds","crypto":false,"bytes":64,"metric":"round_trip_ns","n":50000,"min":2916,"p50":4334,"p90":7042,"p95":7583,"p99":9125,"max":67584,"mean":4961.1,"stddev":1731.2,"verified":true,"ok":true},
+  {"config":"uds-raw","transport":"uds","crypto":false,"bytes":1024,"metric":"round_trip_ns","n":50000,"min":3000,"p50":4333,"p90":6500,"p95":7583,"p99":8833,"max":44541,"mean":4804.4,"stddev":1308.1,"verified":true,"ok":true},
+  {"config":"uds-raw","transport":"uds","crypto":false,"bytes":65536,"metric":"round_trip_ns","n":50000,"min":43250,"p50":71084,"p90":77833,"p95":81333,"p99":93166,"max":275000,"mean":71744.6,"stddev":7239.4,"verified":true,"ok":true},
+  {"config":"uds-aead","transport":"uds","crypto":true,"bytes":64,"metric":"round_trip_ns","n":50000,"min":3042,"p50":4333,"p90":6208,"p95":7125,"p99":8583,"max":50541,"mean":4653.4,"stddev":1292.5,"verified":true,"ok":true},
+  {"config":"uds-aead","transport":"uds","crypto":true,"bytes":1024,"metric":"round_trip_ns","n":50000,"min":4541,"p50":8417,"p90":10084,"p95":10417,"p99":15916,"max":1155875,"mean":8636.3,"stddev":8135.4,"verified":true,"ok":true},
+  {"config":"uds-aead","transport":"uds","crypto":true,"bytes":65536,"metric":"round_trip_ns","n":50000,"min":144834,"p50":177291,"p90":187542,"p95":191959,"p99":210417,"max":5944375,"mean":178013.6,"stddev":40284.4,"verified":true,"ok":true}
+]

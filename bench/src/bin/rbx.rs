@@ -12,9 +12,11 @@
 //!   aead                    in-memory AES-256-GCM seal/open micro-benchmark
 //!   noop                    exits immediately (process spawn baseline)
 //!   shm-exists              prints whether a shared memory segment exists
+//!   lat-shm-req/-resp       steady-state request/echo round-trip latency over two rings
+//!   lat-uds-req/-resp       the same, over one bidirectional Unix domain socket
 
 use std::fs::{self, File, OpenOptions};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::os::fd::AsRawFd;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
@@ -41,6 +43,10 @@ fn main() -> Result<()> {
         "mmap-recv" => mmap_recv(&a),
         "copy" => copy(&a),
         "aead" => aead(&a),
+        "lat-shm-req" => lat_shm_requester(&a),
+        "lat-shm-resp" => lat_shm_responder(&a),
+        "lat-uds-req" => lat_uds_requester(&a),
+        "lat-uds-resp" => lat_uds_responder(&a),
         "noop" => Ok(()),
         "shm-exists" => {
             let exists = ShmSegment::open(a.req("channel")?).is_ok();
@@ -464,6 +470,204 @@ fn aead(a: &Args) -> Result<()> {
         }
         let ok = sha256_hex(&out) == expected;
         println!("{chunk},{size},{rep},{},{},{ok}", t1 - t0, t2 - t1);
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------- latency (request/echo)
+//
+// A fixed payload is sent and echoed back; the requester times each full round trip (RTT)
+// in steady state, after a warm-up, and reports the distribution. This isolates per-message
+// latency from the whole-file throughput the other flows measure. Correctness is checked by
+// comparing every echo against the sent payload.
+//
+// The SPSC ring is one-directional, so shared memory uses two rings: `req` (requester ->
+// responder) and `resp` (responder -> requester). Each side creates one and connects to the
+// other, so start order does not matter. With crypto, each direction is its own AES-256-GCM
+// stream (independent Sealer/Opener, sequence numbers aligned per direction).
+
+fn lat_params(a: &Args) -> Result<(usize, usize, usize)> {
+    let bytes = a.num("bytes", 64)?;
+    let measured = a.num("rounds", 50_000)?;
+    let warmup = a.num("warmup", 5_000)?;
+    ensure!(measured > 0, "--rounds must be non-zero");
+    Ok((bytes, measured, warmup))
+}
+
+fn lat_shm_requester(a: &Args) -> Result<()> {
+    let (bytes, measured, warmup) = lat_params(a)?;
+    let ring = a.num("ring", DEFAULT_RING_SIZE)?;
+    let (mut sealer, mut opener, prefix, overhead) = crypto_parts(a)?;
+    let want = payload(bytes);
+    let mut tx = Producer::create(a.req("req")?, ring)?;
+    let mut rx = Consumer::connect(a.req("resp")?, Duration::from_secs(30))?;
+    ensure!(
+        bytes + overhead <= tx.max_message_len(),
+        "payload of {bytes} does not fit in the ring"
+    );
+
+    let mut samples: Vec<u64> = Vec::with_capacity(measured);
+    let mut verified = true;
+    for i in 0..(warmup + measured) {
+        let t0 = now_ns();
+        let mut grant = tx.reserve(bytes + overhead).context("req reserve")?;
+        grant[prefix..prefix + bytes].copy_from_slice(&want);
+        if let Some(s) = &mut sealer {
+            s.seal_in_place(&mut grant[..bytes + overhead], false)
+                .context("req seal")?;
+        }
+        grant.commit(bytes + overhead);
+
+        let mut msg = rx.recv().context("req recv echo")?;
+        let echo: &[u8] = match &mut opener {
+            Some(o) => o.open_in_place(&mut msg)?.0,
+            None => &msg,
+        };
+        let t1 = now_ns();
+        if echo != want.as_slice() {
+            verified = false;
+        }
+        drop(msg);
+        if i >= warmup {
+            samples.push(t1 - t0);
+        }
+    }
+
+    let stats = LatencyStats::from_samples(&mut samples);
+    let mut fields = stats.as_fields();
+    fields.push(("verified", verified.to_string()));
+    fields.push(("bytes", bytes.to_string()));
+    fields.push(("rounds", measured.to_string()));
+    report("lat", &fields);
+    Ok(())
+}
+
+fn lat_shm_responder(a: &Args) -> Result<()> {
+    let (bytes, measured, warmup) = lat_params(a)?;
+    let rounds = measured + warmup;
+    let ring = a.num("ring", DEFAULT_RING_SIZE)?;
+    let (mut sealer, mut opener, prefix, overhead) = crypto_parts(a)?;
+    let _ = bytes;
+    let mut rx = Consumer::connect(a.req("req")?, Duration::from_secs(30))?;
+    let mut tx = Producer::create(a.req("resp")?, ring)?;
+    for _ in 0..rounds {
+        let mut msg = rx.recv()?;
+        let plain: &[u8] = match &mut opener {
+            Some(o) => o.open_in_place(&mut msg)?.0,
+            None => &msg,
+        };
+        let n = plain.len();
+        let mut grant = tx.reserve(n + overhead)?;
+        grant[prefix..prefix + n].copy_from_slice(plain);
+        if let Some(s) = &mut sealer {
+            s.seal_in_place(&mut grant[..n + overhead], false)?;
+        }
+        grant.commit(n + overhead);
+        drop(msg);
+    }
+    Ok(())
+}
+
+/// Encodes one `[u32 len][frame]` record for the socket. With crypto the frame is the
+/// production AES-256-GCM frame; without, it is the raw payload.
+fn lat_encode(out: &mut Vec<u8>, payload: &[u8], sealer: &mut Option<Sealer>) -> Result<usize> {
+    let (prefix, overhead) = if sealer.is_some() {
+        (PREFIX_LEN, OVERHEAD)
+    } else {
+        (0, 0)
+    };
+    let total = LEN_PREFIX + payload.len() + overhead;
+    if out.len() < total {
+        out.resize(total, 0);
+    }
+    out[LEN_PREFIX + prefix..LEN_PREFIX + prefix + payload.len()].copy_from_slice(payload);
+    if let Some(s) = sealer {
+        s.seal_in_place(
+            &mut out[LEN_PREFIX..LEN_PREFIX + payload.len() + overhead],
+            false,
+        )?;
+    }
+    out[..LEN_PREFIX].copy_from_slice(&((payload.len() + overhead) as u32).to_le_bytes());
+    Ok(total)
+}
+
+/// Reads one record written by [`lat_encode`] and returns the plaintext slice within `buf`.
+fn lat_decode<'b>(
+    stream: &mut UnixStream,
+    buf: &'b mut Vec<u8>,
+    opener: &mut Option<Opener>,
+) -> Result<&'b [u8]> {
+    let mut lenb = [0u8; LEN_PREFIX];
+    stream.read_exact(&mut lenb)?;
+    let len = u32::from_le_bytes(lenb) as usize;
+    ensure!(len <= MAX_FRAME, "frame of {len} bytes exceeds limit");
+    if buf.len() < len {
+        buf.resize(len, 0);
+    }
+    stream.read_exact(&mut buf[..len])?;
+    match opener {
+        Some(o) => Ok(o.open_in_place(&mut buf[..len])?.0),
+        None => Ok(&buf[..len]),
+    }
+}
+
+fn lat_uds_requester(a: &Args) -> Result<()> {
+    let (bytes, measured, warmup) = lat_params(a)?;
+    let (mut sealer, mut opener, _, _) = crypto_parts(a)?;
+    let want = payload(bytes);
+    let path = a.req("socket")?;
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let mut stream = loop {
+        match UnixStream::connect(path) {
+            Ok(s) => break s,
+            Err(_) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(1)),
+            Err(e) => return Err(e).context("connecting"),
+        }
+    };
+
+    let mut sbuf = Vec::new();
+    let mut rbuf = Vec::new();
+    let mut samples: Vec<u64> = Vec::with_capacity(measured);
+    let mut verified = true;
+    for i in 0..(warmup + measured) {
+        let t0 = now_ns();
+        let n = lat_encode(&mut sbuf, &want, &mut sealer)?;
+        stream.write_all(&sbuf[..n])?;
+        let echo = lat_decode(&mut stream, &mut rbuf, &mut opener)?;
+        let t1 = now_ns();
+        if echo != want.as_slice() {
+            verified = false;
+        }
+        if i >= warmup {
+            samples.push(t1 - t0);
+        }
+    }
+
+    let stats = LatencyStats::from_samples(&mut samples);
+    let mut fields = stats.as_fields();
+    fields.push(("verified", verified.to_string()));
+    fields.push(("bytes", bytes.to_string()));
+    fields.push(("rounds", measured.to_string()));
+    report("lat", &fields);
+    Ok(())
+}
+
+fn lat_uds_responder(a: &Args) -> Result<()> {
+    let (_bytes, measured, warmup) = lat_params(a)?;
+    let rounds = measured + warmup;
+    let (mut sealer, mut opener, _, _) = crypto_parts(a)?;
+    let path = a.req("socket")?;
+    let _ = fs::remove_file(path);
+    let listener = UnixListener::bind(path).context("binding socket")?;
+    let (mut stream, _) = listener.accept()?;
+    let _ = fs::remove_file(path);
+
+    let mut rbuf = Vec::new();
+    let mut sbuf = Vec::new();
+    for _ in 0..rounds {
+        let echo = lat_decode(&mut stream, &mut rbuf, &mut opener)?;
+        let n = lat_encode(&mut sbuf, echo, &mut sealer)?;
+        stream.write_all(&sbuf[..n])?;
     }
     Ok(())
 }

@@ -211,21 +211,35 @@ impl WaitSet {
                 std::thread::sleep(FALLBACK_SLEEP);
                 return Ok(progress());
             }
+            let mut degraded = false;
             let result = if progress() {
-                Ok(true)
+                true
             } else {
                 let ts = deadline(PARK_TIMEOUT);
                 match libc::pthread_cond_timedwait(cond, self.mutex.get(), &ts) {
-                    0 => Ok(progress()),
-                    e if e == libc::ETIMEDOUT => Ok(progress()),
-                    e => Err(io::Error::from_raw_os_error(e)),
+                    0 => progress(),
+                    e if e == libc::ETIMEDOUT => progress(),
+                    // A process-shared condvar is not reliable on every platform: macOS binds
+                    // the condvar to the waiting mutex's virtual address, which differs per
+                    // process in a shared mapping, so a cross-process wait is rejected with
+                    // EINVAL. Rather than fail recv/send, degrade to timed polling: correctness
+                    // is preserved and only the idle wakeup latency regresses to FALLBACK_SLEEP.
+                    // (On Linux the wait works, so this branch is not taken there.)
+                    _ => {
+                        degraded = true;
+                        progress()
+                    }
                 }
             };
-            cvt(libc::pthread_mutex_unlock(self.mutex.get()))?;
-            if matches!(result, Ok(true)) {
+            // The wait may have left the mutex unlocked on an error return, so ignore the
+            // unlock result instead of propagating it.
+            let _ = libc::pthread_mutex_unlock(self.mutex.get());
+            if result {
                 parked.store(0, Ordering::SeqCst);
+            } else if degraded {
+                std::thread::sleep(FALLBACK_SLEEP);
             }
-            result
+            Ok(result)
         }
     }
 
@@ -475,7 +489,12 @@ impl Grant<'_> {
         // streaming path stays lock-free. Must follow the Release store above so the woken
         // consumer sees the new `head`.
         // SAFETY: wait set initialised in `create`; segment mapped for the Grant's lifetime.
-        unsafe { header.wait.wake(header.wait.data_available.get(), &header.wait.consumer_parked) };
+        unsafe {
+            header.wait.wake(
+                header.wait.data_available.get(),
+                &header.wait.consumer_parked,
+            )
+        };
     }
 }
 
@@ -724,9 +743,10 @@ impl Drop for Message<'_> {
         // parked. Must follow the Release store above so the woken producer sees the new `tail`.
         // SAFETY: wait set initialised by the producer; segment mapped for the Message lifetime.
         unsafe {
-            header
-                .wait
-                .wake(header.wait.space_available.get(), &header.wait.producer_parked)
+            header.wait.wake(
+                header.wait.space_available.get(),
+                &header.wait.producer_parked,
+            )
         };
     }
 }
@@ -804,7 +824,10 @@ mod tests {
         // never false-share with head or tail on the streaming path.
         let wait = std::mem::offset_of!(Header, wait);
         assert_eq!(wait % 64, 0, "wait set must be cache-line aligned");
-        assert!(wait >= 192, "wait set must come after head/tail lines, got {wait}");
+        assert!(
+            wait >= 192,
+            "wait set must come after head/tail lines, got {wait}"
+        );
         // HEADER_SIZE is platform-dependent now: libc::pthread_mutex_t is 64 B on macOS but
         // 40 B on glibc, and pthread_cond_t differs too, so the total cannot be a single
         // hard-coded constant without breaking the Linux build. On this target it is:
